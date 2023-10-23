@@ -1,6 +1,5 @@
-import random
 import sys
-from random import shuffle
+from random import shuffle, randint
 
 sys.path.insert(1, '/home/jawitold/mcl')
 
@@ -60,7 +59,7 @@ class Prover:
             s += a_i
         s += ax + x * hx
 
-        index = random.randint(0, len(Y))
+        index = randint(0, len(Y))
         rr.insert(index, rx)
         Y.insert(index, g * x)
 
