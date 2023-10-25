@@ -1,205 +1,181 @@
 import json
 import sys
 
+from typing import List, Tuple, Any, Union
 from functools import reduce
 from mcl import Fr, G1
 
 sys.path.insert(1, '/home/jawitold/mcl')
 
 
-def get_file_id(file_path):
-    seed = b""
+def get_file_id(file_path: str) -> str:
+    seed__ = b""
     with open(file_path, 'rb') as file:
-        seed += file.readline()
-    return G1().hashAndMapTo(seed).getStr()
+        seed__ += file.readline()
+    return G1().hashAndMapTo(seed__).getStr()
 
 
-def get_rand_from_fr_based_on_seed(seed: bytes):
-    return Fr.setHashOf(seed)
-
-
-def LI_exp(x: Fr, A):
-    nem = G1().hashAndMapTo(b'1') - G1().hashAndMapTo(b'1')
-    nes = Fr.setHashOf(b'1') / Fr.setHashOf(b'1')
+def li_exp(x_: Fr, A: List[Tuple[Fr, Fr]]) -> G1:
+    neutral_element_multiplier__ = G1().hashAndMapTo(b'1') - G1().hashAndMapTo(b'1')
+    neutral_element_sum_ = Fr.setHashOf(b'1') / Fr.setHashOf(b'1')
     return reduce(lambda res_1, q: res_1 + (
-            q[1] * reduce(lambda res_2, p: res_2 * (x - p[0]) / (q[0] - p[0]) if q[0] != p[0] else res_2, A, nes)),
-                  A, nem)
+            q[1] * reduce(lambda res_2, p: res_2 * (x_ - p[0]) / (q[0] - p[0]) if q[0] != p[0] else res_2, A,
+                          neutral_element_sum_)), A, neutral_element_multiplier__)
 
 
-def get_pairwise_different_random_fr(m):
+def get_unique_random_fr(existing_: List[Fr]) -> Fr:
     while True:
-        xc = Fr.rnd()
-        cond = True
-        for m_i in m:
-            if m_i == xc:
-                cond = False
-                break
-        if cond:
-            break
-    return xc
+        rand_value_ = Fr.rnd()
+        if all(m_i_ != rand_value_ for m_i_ in existing_):
+            return rand_value_
 
 
-def get_polynomial_value(lf, xc: Fr):
-    value = Fr()
-    for ai in reversed(lf):
-        value = value * xc + ai
-    return value
+def get_polynomial_value(coefficients_: List[Fr], x_value_: Fr) -> Fr:
+    value_ = Fr()
+    for coefficient_ in reversed(coefficients_):
+        value_ = value_ * x_value_ + coefficient_
+    return value_
 
 
-class Client:
-    def __init__(self, seed: bytes, file_path):
-        self.Kf = None
-        self.m = None
-        self.sk_c = None
-        self.raw_m = None
-        self.g = None
-        self.file_path = file_path
-
-        self.setup(seed)
-
-    def check_proof(self, Pf):
-        return self.Kf == Pf
-
-    def split_file_into_bytes(self, z=8):
-        with open(self.file_path, 'rb') as file:
-            file_content = file.read()
-        chunk_size = len(file_content) // z
-        self.raw_m = []
-
-        for i in range(z):
-            start = i * chunk_size
-            end = (i + 1) * chunk_size
-            byte_chunk = file_content[start:end]
-            self.raw_m.append(byte_chunk)
-
-        if end < len(file_content):
-            self.raw_m[-1] += file_content[end:]
-        self.chunks_to_fr()
-
-    # def split_file_into_bytes(self, z=8):
-    #     self.raw_m = []
-    #     with open(self.file_path, 'rb') as file:
-    #         for _ in file:
-    #             self.raw_m.append(file.read(z))
-    #     print(self.raw_m)
-    #     self.chunks_to_fr()
-
-    def chunks_to_fr(self):
-        self.m = []
-        for i, f_i in enumerate(self.raw_m):
-            p = Fr()
-            p.setInt(int.from_bytes(f_i, 'little') + i)
-            self.m.append(p)
-
-    def setup(self, seed: bytes):
-        self.g = G1().hashAndMapTo(seed)
-        # self.sk_c = Fr.setHashOf(b'1')
-        self.sk_c = Fr.rnd()
-
-    def poly(self):
-        file_id = get_file_id(self.file_path)
-        return [get_rand_from_fr_based_on_seed(bytes(self.sk_c) + file_id + bytes(i)) for i in range(len(self.m) + 1)]
-
-    def tag_block(self):
-        lf = self.poly()
-        return [(raw, get_polynomial_value(lf, m_i)) for raw, m_i in zip(self.raw_m, self.m)]
-
-    def gen_challenge(self):
-        lf = self.poly()
-        r = Fr.rnd()
-        xc = get_pairwise_different_random_fr(self.m)
-        self.Kf = self.g * (r * get_polynomial_value(lf, xc))
-        return self.g * r, xc, self.g * (r * get_polynomial_value(lf, Fr()))
-
-
-class Cloud:
-    def __init__(self, g: G1):
-        self.Tf = None
-        self.g = g
-
-    def deserialize_Tf(self, json_data):
-        deserialized_data = []
-        for item in json_data:
-            if len(item) == 2:
-                first_item = bytes(item[0], 'latin-1')
-                second_item = Fr()
-                second_item.setStr(bytes(item[1], 'latin-1'))
-                deserialized_data.append((first_item, second_item))
-        return deserialized_data
-    def chunks_to_fr(self):
-        for i, f_i in enumerate(self.Tf):
-            # print(f_i)
-            # exit()
-            p = Fr()
-            p.setInt(int.from_bytes(f_i[0], 'little') + i)
-            t = (p, f_i[1])
-            self.Tf[i] = t
-    def upload_file(self, Tf):
-        self.Tf = Tf
-        self.chunks_to_fr()
-
-    def gen_proof(self, H):
-        gr, xc, grLF_0 = H
-        ksi = [(mi, gr * ti) for mi, ti in self.Tf]
-        ksi.append((Fr(), grLF_0))
-        return LI_exp(xc, ksi)
-
-    def deserialize_H(self, json_data):
-        deserialized_data = []
-        if len(json_data) == 3:
-            first = G1()
-            first.setStr(bytes(json_data[0], 'latin-1'))
-
-            second = Fr()
-            second.setStr(bytes(json_data[1], 'latin-1'))
-
-            third = G1()
-            third.setStr(bytes(json_data[2], 'latin-1'))
-        return (first, second, third)
-
-
-def custom_encoder(obj):
-    if hasattr(obj, 'serialize'):
+def custom_encoder(obj: Any) -> Union[str, bytes]:
+    if hasattr(obj, 'getStr'):
         return obj.getStr()
     elif isinstance(obj, bytes):
         return obj.decode('latin-1')
     raise TypeError("Object of unsupported type")
 
 
-def save_to_json(file_path, value):
+def save_to_json(file_path: str, value: Any) -> None:
     with open(file_path, 'w') as json_file:
         json_file.write(json.dumps(value, default=custom_encoder))
 
 
-def load_from_json(file_path):
+def load_from_json(file_path: str) -> Any:
     with open(file_path, 'r') as file:
-        json_data = json.load(file)
-    return json_data
+        return json.load(file)
+
+
+class Client:
+    def __init__(self, seed: bytes, file_path: str) -> None:
+        self.key_file__ = None
+        self.m_ = None
+        self.secret_key_ = None
+        self.raw_m_ = None
+        self.g__ = None
+        self.file_path = file_path
+        self.setup(seed)
+
+    def check_proof(self, proof_file__: G1) -> bool:
+        return self.key_file__ == proof_file__
+
+    def split_file_into_chunks(self, chunk_size: int = 8) -> None:
+        self.raw_m_ = []
+        with open(self.file_path, 'rb') as file:
+            while chunk := file.read(chunk_size):
+                self.raw_m_.append(chunk)
+        self.convert_chunks_to_fr()
+
+    def convert_chunks_to_fr(self):
+        self.m_ = []
+        for i, chunk in enumerate(self.raw_m_):
+            value_ = Fr()
+            value_.setInt(int.from_bytes(chunk, 'little') + i)
+            self.m_.append(value_)
+
+    def setup(self, seed: bytes) -> None:
+        self.g__ = G1().hashAndMapTo(seed)
+        self.secret_key_ = Fr.rnd()
+
+    def get_polynomial(self) -> List[Fr]:
+        file_id__ = get_file_id(self.file_path)
+        return [Fr.setHashOf(bytes(self.secret_key_) + file_id__ + bytes(i)) for i in range(len(self.m_) + 1)]
+
+    def tag_blocks(self) -> List[Tuple[bytes, Fr]]:
+        coefficients_ = self.get_polynomial()
+        return [(raw, get_polynomial_value(coefficients_, m_value_)) for raw, m_value_ in
+                zip(self.raw_m_, self.m_)]
+
+    def generate_challenge(self) -> Tuple[G1, Fr, G1]:
+        coefficients_ = self.get_polynomial()
+        random_value_ = Fr.rnd()
+        unique_random_value_ = get_unique_random_fr(self.m_)
+        self.key_file__ = self.g__ * (random_value_ * get_polynomial_value(coefficients_, unique_random_value_))
+        return self.g__ * random_value_, unique_random_value_, self.g__ * (
+                random_value_ * get_polynomial_value(coefficients_, Fr()))
+
+
+class Cloud:
+    def __init__(self, g__: G1) -> None:
+        self.tagged_file = None
+        self.g__ = g__
+
+    @staticmethod
+    def deserialize_tagged_file(json_data: List[List[Union[str, bytes]]]) -> List[Tuple[bytes, Fr]]:
+        deserialized_data = []
+        for item in json_data:
+            if len(item) == 2:
+                raw_data = bytes(item[0], 'latin-1')
+                fr_value_ = Fr()
+                fr_value_.setStr(bytes(item[1], 'latin-1'))
+                deserialized_data.append((raw_data, fr_value_))
+        return deserialized_data
+
+    def convert_chunks_to_fr(self) -> None:
+        for i, (chunk, tag_) in enumerate(self.tagged_file):
+            value_ = Fr()
+            value_.setInt(int.from_bytes(chunk, 'little') + i)
+            self.tagged_file[i] = (value_, tag_)
+
+    def upload_file(self, tagged_file: List[Tuple[bytes, Fr]]) -> None:
+        self.tagged_file = tagged_file
+        self.convert_chunks_to_fr()
+
+    def generate_proof(self, challenge: Tuple[G1, Fr, G1]) -> G1:
+        gr__, x_value_, grlf_0__ = challenge
+        ksi_ = [(m_value_, gr__ * tag_) for m_value_, tag_ in self.tagged_file]
+        ksi_.append((Fr(), grlf_0__))
+        return li_exp(x_value_, ksi_)
+
+    @staticmethod
+    def deserialize_challenge(json_data: List[str]) -> Tuple[G1, Fr, G1]:
+        g_value__ = G1()
+        x_value_ = Fr()
+        g_coefficient__ = G1()
+
+        if len(json_data) == 3:
+            g_value__.setStr(bytes(json_data[0], 'latin-1'))
+            x_value_.setStr(bytes(json_data[1], 'latin-1'))
+            g_coefficient__.setStr(bytes(json_data[2], 'latin-1'))
+        return g_value__, x_value_, g_coefficient__
 
 
 if __name__ == "__main__":
-    file_path = './schnorr.py'
-    seed = b'test'
+    file_path = './data/randomfile_1K'
+    seed_value = b'test'
 
-    client = Client(seed, file_path)
-    cloud = Cloud(seed)
-    client.split_file_into_bytes()
-    Tf = client.tag_block()
-    save_to_json('data/Tf.json', Tf)
+    client_instance = Client(seed_value, file_path)
+    cloud_instance = Cloud(client_instance.g__)
+    client_instance.split_file_into_chunks()
+    tagged_file = client_instance.tag_blocks()
+    save_to_json('data/tagged_file.json', tagged_file)
 
-    json_data = load_from_json('data/Tf.json')
-    Tf_cloud = cloud.deserialize_Tf(json_data)
-    cloud.upload_file(Tf_cloud)
+    loaded_data = load_from_json('data/tagged_file.json')
+    cloud_tagged_file = cloud_instance.deserialize_tagged_file(loaded_data)
+    cloud_instance.upload_file(cloud_tagged_file)
 
-    H = client.gen_challenge()
-    save_to_json('data/H.json', H)
+    challenge = client_instance.generate_challenge()
+    save_to_json('data/challenge.json', challenge)
 
-    json_data = load_from_json('data/H.json')
-    H_cloud = cloud.deserialize_H(json_data)
-    Pf = cloud.gen_proof(H_cloud)
-    save_to_json('data/Pf.json', Pf)
+    loaded_challenge = load_from_json('data/challenge.json')
+    cloud_challenge = cloud_instance.deserialize_challenge(loaded_challenge)
+    proof_file__ = cloud_instance.generate_proof(cloud_challenge)
+    save_to_json('data/proof_file.json', proof_file__)
 
-    Pf_cloud = G1()
-    Pf_cloud.setStr(bytes(load_from_json('data/Pf.json'), 'latin-1'))
-
-    print(client.check_proof(Pf_cloud))
+    loaded_proof_file__ = load_from_json('data/proof_file.json')
+    if isinstance(loaded_proof_file__, str):
+        proof_file__ = G1()
+        proof_file__.setStr(bytes(loaded_proof_file__, 'latin-1'))
+        if client_instance.check_proof(proof_file__):
+            print("Proof verified!")
+        else:
+            print("Proof failed!")
