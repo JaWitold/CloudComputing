@@ -1,50 +1,54 @@
 import sys
+
 sys.path.insert(1, '/home/jawitold/mcl')
 
 from mcl import Fr, G1
 
+
 class Prover:
 
-    def __init__(self, g: G1, a: Fr):
-        self.a = a
-        self.g = g
-        self.x = Fr.rnd()
-        self.X = g * self.x
+    def __init__(self, g__: G1, a_: Fr):
+        self.a_ = a_
+        self.g__ = g__
+        self.x_ = Fr.rnd()
+        self.x__ = g__ * self.x_
 
-    def get_X(self):
-        return self.X
+    def get_x(self) -> G1:
+        return self.x__
 
-    def get_s(self, c: Fr):
-        return self.x + self.a * c
+    def get_s(self, c_: Fr) -> Fr:
+        return self.x_ + self.a_ * c_
+
 
 class Verifier:
 
-    def __init__(self, g: G1, A: G1):
-        self.X = None
-        self.c = None
-        self.g = g
-        self.A = A
+    def __init__(self, g__: G1, a__: G1):
+        self.x__ = None
+        self.c_ = None
+        self.g__ = g__
+        self.a__ = a__
 
-    def set_X(self, X: G1):
-        self.X = X
+    def set_x(self, x__: G1):
+        self.x__ = x__
 
-    def get_c(self):
-        self.c = Fr.rnd()
-        return self.c
+    def get_c(self) -> Fr:
+        self.c_ = Fr.rnd()
+        return self.c_
 
-    def verify(self, s: G1):
-        return self.g * s == self.X + (self.A * self.c)
+    def verify(self, s_: Fr) -> bool:
+        return self.g__ * s_ == self.x__ + (self.a__ * self.c_)
+
 
 if __name__ == "__main__":
     # setup
-    g = G1.hashAndMapTo(b"test")
+    g__ = G1.hashAndMapTo(b"test")
 
     # keygen
-    a = Fr.rnd()
-    A = g * a
+    a_ = Fr.rnd()
+    a__ = g__ * a_
 
-    p = Prover(g, a)
-    v = Verifier(g, A)
+    p = Prover(g__, a_)
+    v = Verifier(g__, a__)
 
-    v.set_X(p.get_X())
+    v.set_x(p.get_x())
     print(v.verify(p.get_s(v.get_c())))
