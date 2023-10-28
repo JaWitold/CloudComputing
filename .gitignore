@@ -1,3 +1,6 @@
 /data/
 .idea/
 /notebooks/.ipynb_checkpoints
+*.db
+*.egg-info
+*.pyc
