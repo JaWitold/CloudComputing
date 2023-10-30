@@ -8,7 +8,7 @@ from mcl import Fr, G1
 sys.path.insert(1, '/home/jawitold/mcl')
 
 
-def get_file_id(file_path: str) -> str:
+def get_file_id(file_path: str) -> bytes:
     seed__ = b""
     with open(file_path, 'rb') as file:
         seed__ += file.readline()
@@ -105,9 +105,8 @@ class Client:
 
 
 class Cloud:
-    def __init__(self, g__: G1) -> None:
+    def __init__(self) -> None:
         self.tagged_file = None
-        self.g__ = g__
 
     @staticmethod
     def deserialize_tagged_file(json_data: List[List[Union[str, bytes]]]) -> List[Tuple[bytes, Fr]]:
@@ -154,7 +153,7 @@ if __name__ == "__main__":
     seed_value = b'test'
 
     client_instance = Client(seed_value, file_path)
-    cloud_instance = Cloud(client_instance.g__)
+    cloud_instance = Cloud()
     client_instance.split_file_into_chunks()
     tagged_file = client_instance.tag_blocks()
     save_to_json('data/tagged_file.json', tagged_file)
