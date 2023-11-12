@@ -67,7 +67,6 @@ class Cloud:
 
 
 def deserialize_rand(data):
-    # print(data)
     res = []
     for rand in data:
         rand_ = G1()
