@@ -1,10 +1,9 @@
 import json
 import sys
-from typing import List, Tuple, Any, Union
+from typing import Any, Union
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-
 from mcl import Fr, G1
 
 sys.path.insert(1, '/home/jawitold/mcl')
@@ -30,6 +29,7 @@ def load_from_json(file_path: str) -> Any:
 
 class Client:
     index: int = 0
+
     def __init__(self, seed: bytes, index: int) -> None:
         self.g__ = G1.hashAndMapTo(seed)
         self.alpha = Fr()
@@ -44,9 +44,11 @@ class Client:
         cipher = AES.new(((self.g__ * self.alpha).getStr())[:16], AES.MODE_CBC, iv)
         pt = unpad(cipher.decrypt(ciphertext), AES.block_size)
         return pt.decode()
+
+
 class Cloud:
-    def __init__(self, g__: G1, messages: list[str]) -> None:
-        self.g__ = g__
+    def __init__(self, seed: str, messages: list[str]) -> None:
+        self.g__ = G1.hashAndMapTo(seed)
         self.messages = messages
         self.rand_ = [Fr.rnd() for _ in messages]
         self.rand__ = [self.g__ * rand_ for rand_ in self.rand_]
@@ -64,6 +66,16 @@ class Cloud:
         return ciphertexts
 
 
+def deserialize_rand(data):
+    # print(data)
+    res = []
+    for rand in data:
+        rand_ = G1()
+        rand_.setStr(bytes(rand, 'latin-1'))
+        res.append(rand_)
+    return res
+
+
 def deserialize_w(data: str):
     g = G1()
     g.setStr(bytes(data, 'latin-1'))
@@ -78,15 +90,18 @@ def deserialize_ciphertexts(data):
     return [(bytes(iv, 'latin-1'), bytes(ct, 'latin-1')) for iv, ct in data]
 
 
-
 if __name__ == "__main__":
     seed = b'test'
     messages = ['test', 'tatatat']
 
     client_instance = Client(seed, 0)
-    cloud_instance = Cloud(client_instance.g__, messages)
+    cloud_instance = Cloud(seed, messages)
 
-    w__ = client_instance.get_w(cloud_instance.rand__)
+    save_to_json('data/ot/rand.json', cloud_instance.rand__)
+
+    l_rand = load_from_json('data/ot/rand.json')
+    deserialized_rand__ = deserialize_rand(l_rand)
+    w__ = client_instance.get_w(deserialized_rand__)
     save_to_json('data/ot/w.json', w__)
 
     l_w = load_from_json('data/ot/w.json')
