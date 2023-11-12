@@ -2,11 +2,13 @@ import json
 import sys
 from typing import Any, Union
 
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
 from mcl import Fr, G1
 
 sys.path.insert(1, '/home/jawitold/mcl')
+
+
+def byte_xor(ba1, ba2):
+    return bytes([_a ^ _b for _a, _b in zip(ba1, ba2)])
 
 
 def custom_encoder(obj: Any) -> Union[str, bytes]:
@@ -28,8 +30,6 @@ def load_from_json(file_path: str) -> Any:
 
 
 class Client:
-    index: int = 0
-
     def __init__(self, seed: bytes, index: int) -> None:
         self.g__ = G1.hashAndMapTo(seed)
         self.alpha = Fr()
@@ -39,11 +39,9 @@ class Client:
         self.alpha = Fr.rnd()
         return rand__[self.index] * self.alpha
 
-    def decode(self, ciphertexts: list[tuple[bytes | bytearray | memoryview, bytes]]):
-        iv, ciphertext = ciphertexts[self.index]
-        cipher = AES.new(((self.g__ * self.alpha).getStr())[:16], AES.MODE_CBC, iv)
-        pt = unpad(cipher.decrypt(ciphertext), AES.block_size)
-        return pt.decode()
+    def decode(self, ciphertexts: list[bytes]) -> bytes:
+        key = (self.g__ * self.alpha).getStr()
+        return byte_xor(key, ciphertexts[self.index])
 
 
 class Cloud:
@@ -55,43 +53,40 @@ class Cloud:
 
     def get_keys(self, w__: G1) -> list[bytes]:
         neutral_element = Fr.setHashOf(b'1') / Fr.setHashOf(b'1')
-        return [((w__ * (neutral_element / rand_)).getStr())[:16] for rand_ in self.rand_]
+        return [((w__ * (neutral_element / rand_)).getStr()) for rand_ in self.rand_]
 
-    def encode(self, keys: list[bytes]) -> list[tuple[bytes | bytearray | memoryview, bytes]]:
-        ciphertexts = []
-        for key, message in zip(keys, self.messages):
-            cipher = AES.new(key, AES.MODE_CBC)
-            ciphertext = cipher.encrypt(pad(message, AES.block_size))
-            ciphertexts.append((cipher.iv, ciphertext))
-        return ciphertexts
+    def encode(self, keys: list[bytes]) -> list[bytes]:
+        return [byte_xor(key, message) for key, message in zip(keys, self.messages)]
 
 
 def deserialize_rand(data):
-    res = []
-    for rand in data:
-        rand_ = G1()
-        rand_.setStr(bytes(rand, 'latin-1'))
-        res.append(rand_)
-    return res
+    return [deserialize_to_g1(d) for d in data]
 
 
-def deserialize_w(data: str):
+def deserialize_to_g1(data: str):
     g = G1()
     g.setStr(bytes(data, 'latin-1'))
     return g
 
 
-def deserialize_keys(data):
+def deserialize_to_bytes(data):
     return [bytes(key, 'latin-1') for key in data]
-
-
-def deserialize_ciphertexts(data):
-    return [(bytes(iv, 'latin-1'), bytes(ct, 'latin-1')) for iv, ct in data]
 
 
 if __name__ == "__main__":
     seed = b'test'
-    messages = [b'test', b'tatatat', b'koaspdk']
+    messages = [
+        b"eps1.0_hellofriend.mov",
+        b"eps1.1_ones-and-zer0es.mpeg",
+        b"eps1.2_d3bug.mkv",
+        b"eps1.3_da3m0ns.mp4",
+        b"eps1.4_3xpl0its.wmv",
+        b"eps1.5_br4ve-trave1er.asf",
+        b"eps1.6_v1ew-s0urce.flv",
+        b"eps1.7_wh1ter0se.m4v",
+        b"eps1.8_m1rr0r1ng.qt",
+        b"eps1.9_zer0-day.avi"
+    ]
 
     client_instance = Client(seed, 2)
     cloud_instance = Cloud(seed, messages)
@@ -104,16 +99,16 @@ if __name__ == "__main__":
     save_to_json('data/ot/w.json', w__)
 
     l_w = load_from_json('data/ot/w.json')
-    deserialized_w__ = deserialize_w(l_w)
+    deserialized_w__ = deserialize_to_g1(l_w)
     keys = cloud_instance.get_keys(deserialized_w__)
     save_to_json('data/ot/keys.json', keys)
 
     l_keys = load_from_json('data/ot/keys.json')
-    deserialized_keys = deserialize_keys(l_keys)
+    deserialized_keys = deserialize_to_bytes(l_keys)
     ciphertexts = cloud_instance.encode(deserialized_keys)
     save_to_json('data/ot/ciphertexts.json', ciphertexts)
 
     l_ciphertexts = load_from_json('data/ot/ciphertexts.json')
-    deserialized_ciphertexts = deserialize_ciphertexts(l_ciphertexts)
+    deserialized_ciphertexts = deserialize_to_bytes(l_ciphertexts)
     plain = client_instance.decode(deserialized_ciphertexts)
     print(plain)
