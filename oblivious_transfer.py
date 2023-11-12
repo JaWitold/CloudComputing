@@ -47,7 +47,7 @@ class Client:
 
 
 class Cloud:
-    def __init__(self, seed: str, messages: list[bytes]) -> None:
+    def __init__(self, seed: bytes, messages: list[bytes]) -> None:
         self.g__ = G1.hashAndMapTo(seed)
         self.messages = messages
         self.rand_ = [Fr.rnd() for _ in messages]
@@ -91,9 +91,9 @@ def deserialize_ciphertexts(data):
 
 if __name__ == "__main__":
     seed = b'test'
-    messages = [b'test', b'tatatat']
+    messages = [b'test', b'tatatat', b'koaspdk']
 
-    client_instance = Client(seed, 0)
+    client_instance = Client(seed, 2)
     cloud_instance = Cloud(seed, messages)
 
     save_to_json('data/ot/rand.json', cloud_instance.rand__)
