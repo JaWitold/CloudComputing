@@ -115,5 +115,5 @@ if __name__ == "__main__":
 
     l_ciphertexts = load_from_json('data/ot/ciphertexts.json')
     deserialized_ciphertexts = deserialize_ciphertexts(l_ciphertexts)
-    plain = client_instance.decode(ciphertexts)
+    plain = client_instance.decode(deserialized_ciphertexts)
     print(plain)
