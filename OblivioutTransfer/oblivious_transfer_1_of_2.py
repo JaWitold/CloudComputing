@@ -37,10 +37,8 @@ class Client:
             b__ = client.get_b__(a__)
             send(client_socket, b__)
             ciphertexts = receive(client_socket)
-
-            decryption = client.decode(ciphertexts)
-            print(f"Client: message: \"{decryption}\".")
-
+            client_socket.close()
+            return client.decode(ciphertexts)
 
 class Cloud:
     def __init__(self, seed: bytes, messages: list[bytes]) -> None:
@@ -76,7 +74,7 @@ class Cloud:
 
             ciphertexts = server.encode(keys)
             send(client_socket, ciphertexts)
-
+            client_socket.close()
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
